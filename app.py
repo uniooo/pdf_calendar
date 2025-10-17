@@ -74,9 +74,152 @@ NAME_PATTERNS = [
 ]
 
 
-WEEK_PATTERN = re.compile(r"第\s*(\d+)(?:\s*[-~至到]\s*(\d+))?\s*周")
+WEEK_PATTERN = re.compile(r"(?:第)?\s*(\d+)(?:\s*[-~至到]\s*(\d+))?\s*周")
 DAY_PATTERN = re.compile(r"(周[一二三四五六日天]|星期[一二三四五六日天])")
-TIME_PATTERN = re.compile(r"(\d{1,2}:\d{2})\s*[-–~至到]\s*(\d{1,2}:\d{2})")
+TIME_PATTERN = re.compile(r"(\d{1,2}[:：]\d{2})\s*[-–~至到]\s*(\d{1,2}[:：]\d{2})")
+LOCATION_HINT = re.compile(r"\d|教室|教|楼|馆|中心|实验|室|Lab", re.IGNORECASE)
+
+
+def _normalize_time(value: str) -> str:
+    return value.replace("：", ":")
+
+
+def _extract_week_range(text: str) -> Optional[Tuple[int, int]]:
+    matches = list(WEEK_PATTERN.finditer(text))
+    if not matches:
+        return None
+
+    week_start = min(int(match.group(1)) for match in matches)
+    week_end = max(int(match.group(2) or match.group(1)) for match in matches)
+    return week_start, week_end
+
+
+def _split_cell_courses(cell_text: str) -> List[str]:
+    lines = [line.strip() for line in cell_text.splitlines()]
+    lines = [line for line in lines if line]
+
+    if not lines:
+        return []
+
+    courses: List[List[str]] = []
+    current: List[str] = []
+
+    for line in lines:
+        if WEEK_PATTERN.search(line) and current:
+            courses.append(current)
+            current = [line]
+        else:
+            current.append(line)
+
+    if current:
+        courses.append(current)
+
+    return ["\n".join(course_lines) for course_lines in courses]
+
+
+def _parse_cell_entry(
+    cell_text: str,
+    student: str,
+    weekday: int,
+    time_range: str,
+) -> Optional[CourseEntry]:
+    week_range = _extract_week_range(cell_text)
+    if not week_range:
+        return None
+
+    week_start, week_end = week_range
+
+    cleaned_text = WEEK_PATTERN.sub(" ", cell_text)
+    cleaned_lines = [line.strip() for line in cleaned_text.splitlines() if line.strip()]
+
+    location = ""
+    if cleaned_lines:
+        candidate = cleaned_lines[-1]
+        if LOCATION_HINT.search(candidate):
+            location = candidate
+            cleaned_lines = cleaned_lines[:-1]
+
+    course_name = " ".join(cleaned_lines).strip() or "课程"
+
+    return CourseEntry(
+        student=student,
+        course_name=course_name,
+        location=location,
+        weekday=weekday,
+        time_range=time_range,
+        week_start=week_start,
+        week_end=week_end,
+    )
+
+
+def parse_pdf_schedule_structured(file_bytes: bytes, student_name: str) -> List[CourseEntry]:
+    entries: List[CourseEntry] = []
+
+    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+        for page in pdf.pages:
+            tables = page.extract_tables(
+                table_settings={
+                    "vertical_strategy": "lines",
+                    "horizontal_strategy": "lines",
+                    "intersection_x_tolerance": 5,
+                    "intersection_y_tolerance": 5,
+                }
+            )
+
+            for table in tables or []:
+                if not table or len(table) < 2:
+                    continue
+
+                header = table[0]
+                column_weekday: Dict[int, int] = {}
+
+                for idx, cell in enumerate(header):
+                    if not cell:
+                        continue
+                    label = str(cell).strip()
+                    for day_label, weekday in DAY_MAP.items():
+                        if day_label in label:
+                            column_weekday[idx] = weekday
+                            break
+
+                if not column_weekday:
+                    continue
+
+                for row in table[1:]:
+                    if not row:
+                        continue
+
+                    time_cell = row[0] if row else ""
+                    if not time_cell:
+                        continue
+
+                    time_match = TIME_PATTERN.search(str(time_cell))
+                    if time_match:
+                        start_time = _normalize_time(time_match.group(1))
+                        end_time = _normalize_time(time_match.group(2))
+                        time_range = f"{start_time}-{end_time}"
+                    else:
+                        time_range = str(time_cell).strip() or "时间未识别"
+
+                    for col_idx, weekday in column_weekday.items():
+                        if col_idx >= len(row):
+                            continue
+
+                        cell_value = row[col_idx]
+                        if not cell_value:
+                            continue
+
+                        for course_chunk in _split_cell_courses(str(cell_value)):
+                            entry = _parse_cell_entry(
+                                cell_text=course_chunk,
+                                student=student_name,
+                                weekday=weekday,
+                                time_range=time_range,
+                            )
+                            if entry:
+                                entries.append(entry)
+
+    return entries
 
 
 def extract_text_from_pdf(file_bytes: bytes) -> str:
@@ -125,7 +268,9 @@ def parse_course_entry(line: str, student: str) -> Optional[CourseEntry]:
     if weekday is None:
         return None
 
-    time_range = f"{time_match.group(1)}-{time_match.group(2)}"
+    start_time = _normalize_time(time_match.group(1))
+    end_time = _normalize_time(time_match.group(2))
+    time_range = f"{start_time}-{end_time}"
 
     # Remove identified tokens to isolate course name and location information.
     remaining = line
@@ -160,6 +305,13 @@ def parse_course_entry(line: str, student: str) -> Optional[CourseEntry]:
 def parse_pdf_schedule(file_bytes: bytes, fallback_name: str) -> List[CourseEntry]:
     text = extract_text_from_pdf(file_bytes)
     student_name = detect_student_name(text, fallback=fallback_name)
+
+    structured_entries = parse_pdf_schedule_structured(
+        file_bytes=file_bytes,
+        student_name=student_name,
+    )
+    if structured_entries:
+        return structured_entries
 
     entries: List[CourseEntry] = []
     for _raw_line, normalized_line in parse_course_lines(text):
