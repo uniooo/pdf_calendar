@@ -1,0 +1,1379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>学生课程表与共同空闲时间可视化</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Noto Sans SC", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f4f6fb;
+      color: #1f2933;
+      display: flex;
+      flex-direction: column;
+    }
+    .page-header {
+      background: #ffffff;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      padding: 1.75rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+    }
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+    .title-block h1 {
+      margin: 0;
+      font-size: 1.75rem;
+      color: #0f172a;
+    }
+    .title-block .subtitle {
+      margin: 0;
+      font-size: 0.95rem;
+      color: #475569;
+    }
+    .control-panel {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1.25rem;
+      align-items: flex-start;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .control-group.full-width {
+      grid-column: 1 / -1;
+    }
+    .control-group label {
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .student-selector {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.55rem;
+      padding: 0.75rem;
+      border-radius: 14px;
+      border: 1px solid #dbe4f3;
+      background: #f8fafc;
+      max-height: 220px;
+      overflow-y: auto;
+      position: relative;
+    }
+    .student-selector::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 14px;
+      pointer-events: none;
+      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
+      opacity: 0.4;
+    }
+    .student-option {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.35rem 0.75rem 0.35rem 0.6rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: #ffffff;
+      font-size: 0.9rem;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+    .student-option input {
+      margin: 0;
+    }
+    .student-option.selected {
+      border-color: var(--student-color);
+      background: var(--student-bg, rgba(59, 130, 246, 0.18));
+      box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+    }
+    .student-option .student-color {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--student-color);
+      box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px rgba(15, 23, 42, 0.08);
+    }
+    .student-option.selected .student-color {
+      box-shadow: 0 0 0 2px #ffffff, 0 0 0 5px rgba(59, 130, 246, 0.45);
+    }
+    .student-name {
+      white-space: nowrap;
+    }
+    .selector-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .selector-actions button {
+      padding: 0.35rem 0.9rem;
+      border-radius: 10px;
+      border: 1px solid #94a3b8;
+      background: #ffffff;
+      color: #0f172a;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    .selector-actions button:hover {
+      background: #e2e8f0;
+      border-color: #64748b;
+    }
+    .selector-actions button:active {
+      background: #cbd5f5;
+    }
+    input[type="week"],
+    input[type="date"],
+    input[type="number"] {
+      width: 100%;
+      padding: 0.45rem 0.65rem;
+      border-radius: 10px;
+      border: 1px solid #c7d2fe;
+      font-size: 0.95rem;
+      transition: border 0.2s ease, box-shadow 0.2s ease;
+      background: #ffffff;
+    }
+    input[type="week"]:focus,
+    input[type="date"]:focus,
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+    input[type="file"] {
+      font-size: 0.9rem;
+    }
+    .helper-text {
+      font-size: 0.78rem;
+      color: #64748b;
+    }
+    .legend {
+      min-height: 44px;
+      padding: 0.65rem;
+      border-radius: 12px;
+      border: 1px dashed #cbd5f5;
+      background: #f9fbff;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      font-size: 0.85rem;
+    }
+    .legend-color {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+    }
+    .legend-empty {
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+    .page-main {
+      flex: 1;
+      padding: 1.75rem 2rem 2.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .week-info {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 1.1rem 1.4rem;
+      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+      border: 1px solid #d5e2f5;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      font-size: 0.95rem;
+    }
+    .week-info .info-primary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+    }
+    .week-info .info-secondary {
+      color: #475569;
+      font-size: 0.9rem;
+    }
+    .timetable-scroll {
+      overflow-x: auto;
+      padding-bottom: 1rem;
+    }
+    .timetable-grid {
+      min-width: 940px;
+      display: grid;
+      border-radius: 18px;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.9) 0%, #ffffff 100%);
+      border: 1px solid #d6e0f5;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+      position: relative;
+    }
+    .cell {
+      border-right: 1px solid #e2e8f0;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 0.65rem 0.75rem;
+      font-size: 0.88rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+    .cell.header {
+      background: #eff6ff;
+      font-weight: 700;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .cell.header .date {
+      font-size: 0.82rem;
+      color: #526480;
+    }
+    .cell.header.corner {
+      background: #e2e8f0;
+      color: #1f2937;
+      font-size: 0.92rem;
+    }
+    .day-header.weekend {
+      background: #f8f5ff;
+      color: #4c1d95;
+    }
+    .cell.time {
+      background: #f1f5f9;
+      flex-direction: column;
+      gap: 0.25rem;
+      font-weight: 600;
+      color: #1f2937;
+    }
+    .slot-label {
+      font-size: 0.9rem;
+    }
+    .slot-time {
+      font-size: 0.78rem;
+      color: #64748b;
+    }
+    .cell.slot {
+      position: relative;
+      padding: 0.25rem;
+      background: rgba(255, 255, 255, 0.9);
+      display: block;
+      z-index: 0;
+    }
+    .cell.slot.weekend {
+      background: rgba(252, 244, 255, 0.85);
+    }
+    .cell.slot.free::before {
+      content: "";
+      position: absolute;
+      inset: 3px;
+      background: linear-gradient(135deg, rgba(110, 231, 183, 0.25), rgba(52, 211, 153, 0.32));
+      border-radius: 10px;
+      z-index: 0;
+    }
+    .cell.slot.free {
+      color: #0f766e;
+    }
+    .event {
+      position: relative;
+      margin: 0.18rem;
+      padding: 0.45rem 0.6rem;
+      border-radius: 12px;
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.15);
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      z-index: 2;
+      font-size: 0.78rem;
+      line-height: 1.4;
+      width: calc(100% - var(--event-index, 0) * 8px - 0.36rem);
+      transform: translateX(calc(var(--event-index, 0) * 6px));
+      overflow: hidden;
+      backdrop-filter: blur(1px);
+    }
+    .event-title {
+      font-weight: 700;
+      font-size: 0.86rem;
+    }
+    .event-time {
+      font-size: 0.76rem;
+      opacity: 0.9;
+    }
+    .event-location,
+    .event-student {
+      font-size: 0.75rem;
+      opacity: 0.85;
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+    .event-location::before {
+      content: "📍";
+      font-size: 0.75rem;
+    }
+    .event-student::before {
+      content: "👤";
+      font-size: 0.75rem;
+    }
+    .empty-text {
+      margin: 0;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+    .file-info {
+      font-size: 0.82rem;
+      color: #475569;
+    }
+    @media (max-width: 1100px) {
+      .page-header,
+      .page-main {
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+      }
+      .timetable-grid {
+        min-width: 820px;
+      }
+    }
+    @media (max-width: 768px) {
+      .page-header {
+        padding: 1.25rem 1rem 1.5rem;
+      }
+      .page-main {
+        padding: 1.25rem 1rem 1.75rem;
+      }
+      .control-panel {
+        grid-template-columns: 1fr;
+      }
+      .week-info .info-primary {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.6rem;
+      }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js" defer></script>
+</head>
+<body>
+  <header class="page-header">
+    <div class="title-block">
+      <h1>学生课程表与共同空闲时间</h1>
+      <p class="subtitle">上传 Excel 或使用示例数据，自动解析节次与周次，展示多名学生的课程并高亮共同空闲时段。</p>
+    </div>
+    <div class="control-panel">
+      <div class="control-group full-width">
+        <label for="xlsxInput">导入 Excel (.xlsx)</label>
+        <input type="file" id="xlsxInput" accept=".xlsx,.xls" />
+        <span id="fileInfo" class="file-info"></span>
+      </div>
+      <div class="control-group full-width">
+        <label>选择学生</label>
+        <div class="selector-actions">
+          <button type="button" id="selectAllBtn">全选</button>
+          <button type="button" id="clearAllBtn">清空</button>
+        </div>
+        <div id="studentSelector" class="student-selector"></div>
+      </div>
+      <div class="control-group">
+        <label for="weekPicker">选择周</label>
+        <input type="week" id="weekPicker" />
+      </div>
+      <div class="control-group">
+        <label for="termStartPicker">学期第 1 周（周一）</label>
+        <input type="date" id="termStartPicker" />
+        <small class="helper-text">设置开学周一，可自动换算当前学期周次。</small>
+      </div>
+      <div class="control-group">
+        <label for="manualWeekInput">直接指定学期周次</label>
+        <input type="number" id="manualWeekInput" min="1" placeholder="例如 8" />
+        <small class="helper-text">填写后优先使用该数值过滤课程，留空则根据开学日期自动计算。</small>
+      </div>
+      <div class="control-group full-width">
+        <label>学生图例</label>
+        <div id="legend" class="legend"></div>
+      </div>
+    </div>
+  </header>
+  <main class="page-main">
+    <section id="weekInfo" class="week-info"></section>
+    <div class="timetable-scroll">
+      <div id="timetable" class="timetable-grid"></div>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const defaultCourseData = [
+        {
+          XSXM: "张三",
+          KCMC: "高等数学",
+          JX0601MC: "第一教学楼 A101",
+          KCSJMX: "1,2",
+          KKZCMX: "1-16",
+          MC0: "10102",
+          XS0: "1-16"
+        },
+        {
+          XSXM: "张三",
+          KCMC: "大学英语",
+          JX0601MC: "外语楼 302",
+          KCSJ: "20607",
+          KKZCMX: "1-16"
+        },
+        {
+          XSXM: "张三",
+          KCMC: "实验技能",
+          JX0601MC: "实验楼 210",
+          KCSJ: "21112",
+          KKZCMX: "5-12"
+        },
+        {
+          XSXM: "李四",
+          KCMC: "线性代数",
+          JX0601MC: "第二教学楼 B208",
+          KCSJMX: "1,2",
+          KKZCMX: "1-16(单周)",
+          MC1: "20102",
+          XS1: "1-16单"
+        },
+        {
+          XSXM: "李四",
+          KCMC: "大学体育",
+          JX0601MC: "体育馆",
+          KCSJ: "40607",
+          KKZCMX: "1-16"
+        },
+        {
+          XSXM: "王五",
+          KCMC: "软件工程",
+          JX0601MC: "信息楼 D215",
+          KCSJ: "30708",
+          KKZCMX: "1-16"
+        },
+        {
+          XSXM: "王五",
+          KCMC: "创新实践",
+          JX0601MC: "创新中心 308",
+          KCSJMX: "11,12",
+          KKZCMX: "2-16(双周)",
+          MC5: "60102",
+          XS5: "2-16双"
+        }
+      ];
+
+      const TIME_SLOTS = [
+        { session: 1, label: "第1节", start: "08:00", end: "08:45" },
+        { session: 2, label: "第2节", start: "08:50", end: "09:35" },
+        { session: 3, label: "第3节", start: "09:50", end: "10:35" },
+        { session: 4, label: "第4节", start: "10:40", end: "11:25" },
+        { session: 5, label: "第5节", start: "11:30", end: "12:15" },
+        { session: 6, label: "第6节", start: "13:30", end: "14:15" },
+        { session: 7, label: "第7节", start: "14:20", end: "15:05" },
+        { session: 8, label: "第8节", start: "15:20", end: "16:05" },
+        { session: 9, label: "第9节", start: "16:10", end: "16:55" },
+        { session: 10, label: "第10节", start: "18:30", end: "19:15" },
+        { session: 11, label: "第11节", start: "19:20", end: "20:05" },
+        { session: 12, label: "第12节", start: "20:10", end: "20:55" },
+        { session: 13, label: "第13节", start: "21:00", end: "21:45" }
+      ];
+
+      const DAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+      const dayFieldDefinitions = [
+        { field: "MC0", dayIndex: 1 },
+        { field: "MC1", dayIndex: 2 },
+        { field: "MC2", dayIndex: 3 },
+        { field: "MC3", dayIndex: 4 },
+        { field: "MC4", dayIndex: 5 },
+        { field: "ZHXS", dayIndex: 5 },
+        { field: "MC5", dayIndex: 6 },
+        { field: "MC6", dayIndex: 7 }
+      ];
+
+      const sessionRowIndexMap = new Map();
+      TIME_SLOTS.forEach((slot, index) => {
+        sessionRowIndexMap.set(slot.session, index);
+      });
+
+      const MS_PER_DAY = 24 * 60 * 60 * 1000;
+      const MS_PER_WEEK = MS_PER_DAY * 7;
+
+      let timetableEl;
+      let weekPickerEl;
+      let termStartPickerEl;
+      let manualWeekInputEl;
+      let studentSelectorEl;
+      let legendEl;
+      let weekInfoEl;
+      let selectAllBtn;
+      let clearAllBtn;
+      let fileInputEl;
+      let fileInfoEl;
+
+      const dayHeaderRefs = [];
+      const slotCells = [];
+      const studentColorMap = new Map();
+      const studentIndexMap = new Map();
+
+      let currentCourseData = Array.isArray(window.courseData) ? window.courseData : defaultCourseData;
+      if (!Array.isArray(window.courseData)) {
+        window.courseData = currentCourseData;
+      }
+
+      document.addEventListener("DOMContentLoaded", init);
+
+      function init() {
+        timetableEl = document.getElementById("timetable");
+        weekPickerEl = document.getElementById("weekPicker");
+        termStartPickerEl = document.getElementById("termStartPicker");
+        manualWeekInputEl = document.getElementById("manualWeekInput");
+        studentSelectorEl = document.getElementById("studentSelector");
+        legendEl = document.getElementById("legend");
+        weekInfoEl = document.getElementById("weekInfo");
+        selectAllBtn = document.getElementById("selectAllBtn");
+        clearAllBtn = document.getElementById("clearAllBtn");
+        fileInputEl = document.getElementById("xlsxInput");
+        fileInfoEl = document.getElementById("fileInfo");
+
+        initWeekControls();
+        initTimetableGrid();
+        renderStudentSelector();
+        attachControlEvents();
+        update();
+      }
+
+      function attachControlEvents() {
+        weekPickerEl?.addEventListener("change", update);
+        termStartPickerEl?.addEventListener("change", update);
+        manualWeekInputEl?.addEventListener("input", update);
+        selectAllBtn?.addEventListener("click", (event) => {
+          event.preventDefault();
+          toggleAllStudents(true);
+        });
+        clearAllBtn?.addEventListener("click", (event) => {
+          event.preventDefault();
+          toggleAllStudents(false);
+        });
+        fileInputEl?.addEventListener("change", handleFileUpload);
+      }
+      async function handleFileUpload(event) {
+        const file = event.target.files?.[0];
+        if (!file) {
+          fileInfoEl.textContent = "";
+          return;
+        }
+        try {
+          fileInfoEl.textContent = `正在读取：${file.name}`;
+          const data = await file.arrayBuffer();
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+          const parsed = rows.map((row) => ({
+            XSXM: row["XSXM"] ?? row["学生姓名"] ?? row["姓名"] ?? "",
+            KCMC: row["KCMC"] ?? row["课程名称"] ?? row["课程"] ?? "",
+            JX0601MC: row["JX0601MC"] ?? row["上课地点"] ?? row["地点"] ?? "",
+            KCSJMX: row["KCSJMX"] ?? row["课程时间明细"] ?? row["课程时间"] ?? "",
+            KCSJ: row["KCSJ"] ?? row["上课节次"] ?? "",
+            KKZCMX: row["KKZCMX"] ?? row["开课周次明细"] ?? row["开课周次"] ?? row["KKZC"] ?? "",
+            KKZC: row["KKZC"] ?? "",
+            MC0: row["MC0"] ?? "",
+            MC1: row["MC1"] ?? "",
+            MC2: row["MC2"] ?? "",
+            MC3: row["MC3"] ?? "",
+            MC4: row["MC4"] ?? "",
+            MC5: row["MC5"] ?? "",
+            MC6: row["MC6"] ?? "",
+            ZHXS: row["ZHXS"] ?? "",
+            XS0: row["XS0"] ?? "",
+            XS1: row["XS1"] ?? "",
+            XS2: row["XS2"] ?? "",
+            XS3: row["XS3"] ?? "",
+            XS4: row["XS4"] ?? "",
+            XS5: row["XS5"] ?? "",
+            XS6: row["XS6"] ?? ""
+          }));
+
+          currentCourseData = parsed.filter((item) => Object.values(item).some((value) => String(value).trim() !== ""));
+          window.courseData = currentCourseData;
+          renderStudentSelector();
+          update();
+          fileInfoEl.textContent = `已载入：${file.name}（${parsed.length} 行）`;
+        } catch (error) {
+          console.error(error);
+          fileInfoEl.textContent = "读取文件失败，请确认格式正确。";
+        }
+      }
+
+      function renderStudentSelector() {
+        if (!studentSelectorEl) return;
+        studentSelectorEl.innerHTML = "";
+        studentColorMap.clear();
+        studentIndexMap.clear();
+        const uniqueNames = Array.from(new Set(currentCourseData.map((item) => (item.XSXM || "").trim()))).filter(Boolean);
+        uniqueNames.sort((a, b) => a.localeCompare(b, "zh-Hans-CN"));
+        if (!uniqueNames.length) {
+          const placeholder = document.createElement("p");
+          placeholder.className = "empty-text";
+          placeholder.textContent = "尚未从数据源读取到学生姓名。";
+          studentSelectorEl.appendChild(placeholder);
+          updateLegend([]);
+          return;
+        }
+        uniqueNames.forEach((name) => {
+          const option = document.createElement("label");
+          option.className = "student-option";
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = name;
+          checkbox.checked = true;
+          checkbox.addEventListener("change", handleStudentCheckboxChange);
+          const color = getStudentColor(name);
+          option.style.setProperty("--student-color", color);
+          option.style.setProperty("--student-bg", convertHslToHsla(color, 0.18));
+          const swatch = document.createElement("span");
+          swatch.className = "student-color";
+          swatch.style.background = color;
+          const nameSpan = document.createElement("span");
+          nameSpan.className = "student-name";
+          nameSpan.textContent = name;
+          option.append(checkbox, swatch, nameSpan);
+          studentSelectorEl.appendChild(option);
+        });
+        syncStudentOptionStates();
+        updateLegend(getSelectedStudents());
+      }
+
+      function initWeekControls() {
+        const today = new Date();
+        const defaultWeekStart = startOfWeek(today);
+        if (weekPickerEl && !weekPickerEl.value) {
+          weekPickerEl.value = formatWeekValue(defaultWeekStart);
+        }
+        if (termStartPickerEl && !termStartPickerEl.value) {
+          termStartPickerEl.value = formatDateInput(defaultWeekStart);
+        }
+      }
+
+      function initTimetableGrid() {
+        if (!timetableEl) return;
+        timetableEl.innerHTML = "";
+        dayHeaderRefs.length = 0;
+        slotCells.length = 0;
+        const columnCount = DAY_NAMES.length;
+        timetableEl.style.gridTemplateColumns = `90px repeat(${columnCount}, minmax(130px, 1fr))`;
+        timetableEl.style.gridTemplateRows = `48px repeat(${TIME_SLOTS.length}, minmax(70px, 1fr))`;
+        const corner = document.createElement("div");
+        corner.className = "cell header corner";
+        corner.style.gridColumn = "1";
+        corner.style.gridRow = "1";
+        corner.textContent = "时间";
+        timetableEl.appendChild(corner);
+        for (let dayIndex = 0; dayIndex < DAY_NAMES.length; dayIndex += 1) {
+          const header = document.createElement("div");
+          header.className = "cell header day-header";
+          if (dayIndex >= 5) {
+            header.classList.add("weekend");
+          }
+          header.style.gridColumn = String(dayIndex + 2);
+          header.style.gridRow = "1";
+          const label = document.createElement("span");
+          label.className = "day-label";
+          label.textContent = DAY_NAMES[dayIndex];
+          const dateSpan = document.createElement("span");
+          dateSpan.className = "date";
+          header.append(label, dateSpan);
+          timetableEl.appendChild(header);
+          dayHeaderRefs[dayIndex] = { container: header, dateEl: dateSpan };
+        }
+        TIME_SLOTS.forEach((slot, index) => {
+          const row = index + 2;
+          const timeCell = document.createElement("div");
+          timeCell.className = "cell time";
+          timeCell.style.gridColumn = "1";
+          timeCell.style.gridRow = String(row);
+          const labelEl = document.createElement("div");
+          labelEl.className = "slot-label";
+          labelEl.textContent = slot.label || `第${slot.session}节`;
+          const timeEl = document.createElement("div");
+          timeEl.className = "slot-time";
+          timeEl.textContent = slot.start && slot.end ? `${slot.start} - ${slot.end}` : "时间未设置";
+          timeCell.append(labelEl, timeEl);
+          timetableEl.appendChild(timeCell);
+          for (let dayIndex = 0; dayIndex < DAY_NAMES.length; dayIndex += 1) {
+            const slotCell = document.createElement("div");
+            slotCell.className = "cell slot";
+            if (dayIndex >= 5) {
+              slotCell.classList.add("weekend");
+            }
+            slotCell.dataset.day = String(dayIndex + 1);
+            slotCell.dataset.session = String(slot.session);
+            slotCell.style.gridColumn = String(dayIndex + 2);
+            slotCell.style.gridRow = String(row);
+            timetableEl.appendChild(slotCell);
+            slotCells.push(slotCell);
+          }
+        });
+      }
+      function handleStudentCheckboxChange() {
+        syncStudentOptionStates();
+        update();
+      }
+
+      function syncStudentOptionStates() {
+        if (!studentSelectorEl) return;
+        const options = studentSelectorEl.querySelectorAll(".student-option");
+        options.forEach((option) => {
+          const checkbox = option.querySelector('input[type="checkbox"]');
+          if (!checkbox) return;
+          option.classList.toggle("selected", checkbox.checked);
+        });
+      }
+
+      function toggleAllStudents(checked) {
+        if (!studentSelectorEl) return;
+        const checkboxes = studentSelectorEl.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach((cb) => {
+          cb.checked = checked;
+        });
+        syncStudentOptionStates();
+        update();
+      }
+
+      function getSelectedStudents() {
+        if (!studentSelectorEl) return [];
+        const checkboxes = studentSelectorEl.querySelectorAll('input[type="checkbox"]');
+        return Array.from(checkboxes)
+          .filter((cb) => cb.checked)
+          .map((cb) => cb.value);
+      }
+
+      function update() {
+        const selectedStudents = getSelectedStudents();
+        updateLegend(selectedStudents);
+        const weekStart = getCurrentWeekStart();
+        const weekDates = getWeekDates(weekStart);
+        updateDayHeaders(weekDates);
+        const academicWeek = computeAcademicWeek(weekStart);
+        updateWeekInfo(weekStart, weekDates, academicWeek, selectedStudents);
+        const events = buildEvents(selectedStudents, academicWeek);
+        renderEvents(events, selectedStudents.length);
+        highlightFreeSlots(events, selectedStudents.length);
+      }
+
+      function updateLegend(selectedStudents) {
+        if (!legendEl) return;
+        legendEl.innerHTML = "";
+        if (!selectedStudents.length) {
+          const message = document.createElement("span");
+          message.className = "legend-empty";
+          message.textContent = "尚未选择学生";
+          legendEl.appendChild(message);
+          return;
+        }
+        selectedStudents.forEach((name) => {
+          const color = getStudentColor(name);
+          const item = document.createElement("div");
+          item.className = "legend-item";
+          const swatch = document.createElement("span");
+          swatch.className = "legend-color";
+          swatch.style.background = color;
+          const label = document.createElement("span");
+          label.textContent = name;
+          item.append(swatch, label);
+          legendEl.appendChild(item);
+        });
+      }
+
+      function getCurrentWeekStart() {
+        const fallback = startOfWeek(new Date());
+        if (!weekPickerEl) return fallback;
+        const value = weekPickerEl.value;
+        if (value) {
+          const parsed = parseWeekValue(value);
+          if (parsed) {
+            return parsed;
+          }
+        }
+        weekPickerEl.value = formatWeekValue(fallback);
+        return fallback;
+      }
+
+      function computeAcademicWeek(weekStart) {
+        const manualValue = manualWeekInputEl ? parseInt(manualWeekInputEl.value, 10) : NaN;
+        if (Number.isFinite(manualValue) && manualValue > 0) {
+          return manualValue;
+        }
+        if (!termStartPickerEl || !termStartPickerEl.value) return null;
+        const baseDate = new Date(termStartPickerEl.value);
+        if (Number.isNaN(baseDate.getTime())) return null;
+        const baseMonday = startOfWeek(baseDate);
+        const normalizedWeekStart = new Date(weekStart);
+        normalizedWeekStart.setHours(0, 0, 0, 0);
+        const diff = normalizedWeekStart.getTime() - baseMonday.getTime();
+        return Math.floor(diff / MS_PER_WEEK) + 1;
+      }
+
+      function updateWeekInfo(weekStart, weekDates, academicWeek, selectedStudents) {
+        if (!weekInfoEl) return;
+        const endDate = new Date(weekStart);
+        endDate.setDate(weekStart.getDate() + 6);
+        const isoInfo = getISOWeekInfo(weekStart);
+        const rangeLabel = `${formatFullDate(weekStart)} 至 ${formatFullDate(endDate)}`;
+        const isoLabel = `${isoInfo.year}年第${String(isoInfo.week).padStart(2, "0")}周`;
+        let academicLabel = "未设置";
+        if (typeof academicWeek === "number") {
+          academicLabel = academicWeek >= 1 ? `第${academicWeek}周` : `开学前第${Math.abs(academicWeek) + 1}周`;
+        }
+        const selectedLabel = selectedStudents.length ? selectedStudents.join("、") : "尚未选择学生";
+        weekInfoEl.innerHTML = `
+          <div class="info-primary">
+            <span><strong>周范围：</strong>${rangeLabel}</span>
+            <span><strong>ISO 周次：</strong>${isoLabel}</span>
+            <span><strong>学期周次：</strong>${academicLabel}</span>
+          </div>
+          <div class="info-secondary">
+            <strong>已选学生：</strong>${selectedLabel}
+          </div>
+        `;
+      }
+
+      function getWeekDates(weekStart) {
+        const dates = [];
+        for (let i = 0; i < 7; i += 1) {
+          const date = new Date(weekStart);
+          date.setDate(weekStart.getDate() + i);
+          dates.push(date);
+        }
+        return dates;
+      }
+
+      function updateDayHeaders(weekDates) {
+        weekDates.forEach((date, index) => {
+          const ref = dayHeaderRefs[index];
+          if (!ref) return;
+          ref.dateEl.textContent = formatDayDisplay(date);
+          ref.container.dataset.fullDate = formatFullDate(date);
+        });
+      }
+      function buildEvents(selectedStudents, academicWeek) {
+        if (!Array.isArray(selectedStudents) || !selectedStudents.length) {
+          return [];
+        }
+        const selectedSet = new Set(selectedStudents);
+        const events = [];
+        currentCourseData.forEach((course) => {
+          const studentName = (course.XSXM || "").trim();
+          if (!studentName || !selectedSet.has(studentName)) return;
+
+          const generalWeeks = getCourseWeeks(course);
+          const kcsjSegments = parseKcsjSegments(course.KCSJ);
+          if (kcsjSegments.length) {
+            kcsjSegments.forEach((segment) => {
+              appendEventFromSegment({
+                course,
+                segment,
+                studentName,
+                weeks: generalWeeks,
+                academicWeek,
+                events
+              });
+            });
+            return;
+          }
+
+          const sessions = parseSessionNumbers(course.KCSJMX);
+          if (!sessions.length) return;
+          const days = determineCourseDays(course);
+          if (!days.length) return;
+
+          days.forEach((dayInfo) => {
+            const weeksForDay = parseWeeksForDay(course, dayInfo.field, generalWeeks);
+            if (typeof academicWeek === "number" && weeksForDay.length && !weeksForDay.includes(academicWeek)) {
+              return;
+            }
+            const validSessions = sessions.filter((session) => sessionRowIndexMap.has(session));
+            if (!validSessions.length) return;
+            const groups = groupConsecutiveSessions(validSessions);
+            groups.forEach(({ start, end }) => {
+              appendEvent({
+                studentName,
+                course,
+                dayIndex: dayInfo.dayIndex,
+                startSession: start,
+                endSession: end,
+                events
+              });
+            });
+          });
+        });
+
+        events.sort((a, b) => {
+          if (a.dayIndex !== b.dayIndex) return a.dayIndex - b.dayIndex;
+          if (a.startSession !== b.startSession) return a.startSession - b.startSession;
+          return a.student.localeCompare(b.student, "zh-Hans-CN");
+        });
+
+        return events;
+      }
+
+      function appendEventFromSegment({ course, segment, studentName, weeks, academicWeek, events }) {
+        const weeksForSegment = segment.weeks?.length ? segment.weeks : weeks;
+        if (typeof academicWeek === "number" && weeksForSegment?.length && !weeksForSegment.includes(academicWeek)) {
+          return;
+        }
+        appendEvent({
+          studentName,
+          course,
+          dayIndex: segment.dayIndex,
+          startSession: segment.startSession,
+          endSession: segment.endSession,
+          events
+        });
+      }
+
+      function appendEvent({ studentName, course, dayIndex, startSession, endSession, events }) {
+        if (!sessionRowIndexMap.has(startSession) || !sessionRowIndexMap.has(endSession)) {
+          return;
+        }
+        const startIndex = sessionRowIndexMap.get(startSession);
+        const endIndex = sessionRowIndexMap.get(endSession);
+        if (startIndex === undefined || endIndex === undefined) return;
+        const color = getStudentColor(studentName);
+        const textColor = getReadableTextColor(color);
+        const { sessionLabel, timeLabel } = getSessionAndTimeLabels(startSession, endSession);
+        events.push({
+          student: studentName,
+          courseName: course.KCMC || "未命名课程",
+          location: course.JX0601MC || "",
+          dayIndex,
+          startSession,
+          endSession,
+          startRowIndex: startIndex,
+          endRowIndex: endIndex,
+          color,
+          textColor,
+          sessionLabel,
+          timeLabel
+        });
+      }
+
+      function renderEvents(events, selectedCount) {
+        if (!timetableEl) return;
+        timetableEl.querySelectorAll(".event").forEach((node) => node.remove());
+        events.forEach((event) => {
+          const eventEl = document.createElement("div");
+          eventEl.className = "event";
+          const rowStart = event.startRowIndex + 2;
+          const span = event.endRowIndex - event.startRowIndex + 1;
+          eventEl.style.gridColumn = String(event.dayIndex + 1);
+          eventEl.style.gridRow = `${rowStart} / span ${span}`;
+          eventEl.style.setProperty("--event-index", getStudentIndex(event.student));
+          const gradientStart = adjustHslLightness(event.color, 12);
+          const borderColor = adjustHslLightness(event.color, -14);
+          eventEl.style.background = `linear-gradient(135deg, ${gradientStart} 0%, ${event.color} 100%)`;
+          eventEl.style.borderColor = borderColor;
+          eventEl.style.color = event.textColor;
+          const titleEl = document.createElement("div");
+          titleEl.className = "event-title";
+          titleEl.textContent = event.courseName;
+          const timeEl = document.createElement("div");
+          timeEl.className = "event-time";
+          timeEl.textContent = event.timeLabel ? `${event.sessionLabel} · ${event.timeLabel}` : event.sessionLabel;
+          eventEl.append(titleEl, timeEl);
+          if (event.location) {
+            const locationEl = document.createElement("div");
+            locationEl.className = "event-location";
+            locationEl.textContent = event.location;
+            eventEl.appendChild(locationEl);
+          }
+          if (selectedCount > 1) {
+            const studentEl = document.createElement("div");
+            studentEl.className = "event-student";
+            studentEl.textContent = event.student;
+            eventEl.appendChild(studentEl);
+          }
+          const tooltipParts = [
+            event.courseName,
+            event.student,
+            event.location,
+            event.timeLabel ? `${event.sessionLabel} · ${event.timeLabel}` : event.sessionLabel
+          ].filter(Boolean);
+          eventEl.title = tooltipParts.join(" | ");
+          timetableEl.appendChild(eventEl);
+        });
+      }
+
+      function highlightFreeSlots(events, selectedCount) {
+        slotCells.forEach((cell) => cell.classList.remove("free"));
+        if (!selectedCount) return;
+        const occupancy = computeOccupancyMap(events);
+        slotCells.forEach((cell) => {
+          const key = `${cell.dataset.day}-${cell.dataset.session}`;
+          const occ = occupancy.get(key);
+          if (!occ || occ.size === 0) {
+            cell.classList.add("free");
+          }
+        });
+      }
+
+      function computeOccupancyMap(events) {
+        const map = new Map();
+        events.forEach((event) => {
+          for (let session = event.startSession; session <= event.endSession; session += 1) {
+            const key = `${event.dayIndex}-${session}`;
+            if (!map.has(key)) {
+              map.set(key, new Set());
+            }
+            map.get(key).add(event.student);
+          }
+        });
+        return map;
+      }
+      function determineCourseDays(course) {
+        const days = [];
+        const seen = new Set();
+        dayFieldDefinitions.forEach((definition) => {
+          if (seen.has(definition.dayIndex)) return;
+          const value = course[definition.field];
+          if (value === undefined || value === null) return;
+          if (String(value).trim() === "") return;
+          seen.add(definition.dayIndex);
+          days.push({ field: definition.field, dayIndex: definition.dayIndex });
+        });
+        if (!days.length) {
+          const fallbackDay = parseDayFromText(course.KCSJMX || "");
+          if (fallbackDay) {
+            days.push({ field: "KCSJMX", dayIndex: fallbackDay });
+          }
+        }
+        return days;
+      }
+
+      function parseWeeksForDay(course, field, generalWeeks) {
+        let weeks = [];
+        if (field && field.startsWith("MC")) {
+          const index = Number(field.slice(2));
+          const xsField = `XS${index}`;
+          if (course[xsField]) {
+            weeks = parseWeekNumbers(course[xsField]);
+          }
+        } else if (field === "ZHXS") {
+          weeks = parseWeekNumbers(course.ZHXS);
+          if ((!weeks || !weeks.length) && course.XS4) {
+            weeks = parseWeekNumbers(course.XS4);
+          }
+        }
+        if (!weeks.length && generalWeeks.length) {
+          weeks = generalWeeks;
+        }
+        return weeks;
+      }
+
+      function getCourseWeeks(course) {
+        const fields = ["KKZCMX", "KKZC", "KKZCXX", "KKZC_TEXT"];
+        for (const field of fields) {
+          if (course[field]) {
+            const weeks = parseWeekNumbers(course[field]);
+            if (weeks.length) {
+              return weeks;
+            }
+          }
+        }
+        return [];
+      }
+
+      function parseKcsjSegments(value) {
+        if (value === undefined || value === null) return [];
+        const raw = String(value).trim();
+        if (!raw) return [];
+        const tokens = raw.split(/[,，;；、\s]+/).filter(Boolean);
+        const segments = [];
+        tokens.forEach((token) => {
+          const normalized = token.replace(/[^\d]/g, "");
+          if (normalized.length < 5) return;
+          const day = Number(normalized.slice(0, 1));
+          const start = Number(normalized.slice(1, 3));
+          const end = Number(normalized.slice(3, 5));
+          if (!Number.isFinite(day) || day < 1 || day > 7) return;
+          if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+          const startSession = Math.min(start, end);
+          const endSession = Math.max(start, end);
+          segments.push({ dayIndex: day, startSession, endSession });
+        });
+        return segments;
+      }
+
+      function parseSessionNumbers(input) {
+        if (input === undefined || input === null) return [];
+        const raw = String(input).trim();
+        if (!raw) return [];
+        const cleaned = raw.replace(/[第节时上下课（）()]/g, "");
+        const segments = cleaned.split(/[,，;；、\s]+/).filter(Boolean);
+        const sessions = new Set();
+
+        segments.forEach((segment) => {
+          const part = segment.trim();
+          if (!part) return;
+
+          const rangeMatch = part.match(/(\d+)\s*(?:-|~|～|—|–|至)\s*(\d+)/);
+          if (rangeMatch) {
+            let start = parseInt(rangeMatch[1], 10);
+            let end = parseInt(rangeMatch[2], 10);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+            if (start > end) [start, end] = [end, start];
+            for (let n = start; n <= end; n += 1) {
+              if (n >= 1 && n <= 30) {
+                sessions.add(n);
+              }
+            }
+            return;
+          }
+
+          const matches = part.match(/\d+/g);
+          if (matches) {
+            matches.forEach((numStr) => {
+              const value = parseInt(numStr, 10);
+              if (Number.isFinite(value) && value >= 1 && value <= 30) {
+                sessions.add(value);
+              }
+            });
+          }
+        });
+
+        return Array.from(sessions).sort((a, b) => a - b);
+      }
+
+      function parseWeekNumbers(input) {
+        if (input === undefined || input === null) return [];
+        const raw = String(input).trim();
+        if (!raw) return [];
+        const sanitizedRaw = raw.replace(/[()（）]/g, "");
+        const segments = sanitizedRaw.split(/[,，;；、\s]+/).filter(Boolean);
+        const numbers = new Set();
+
+        segments.forEach((segment) => {
+          let token = segment.trim();
+          if (!token) return;
+
+          const odd = /单/.test(token);
+          const even = /双/.test(token);
+
+          token = token.replace(/[单双]/g, "");
+          token = token.replace(/[^\d\-~～—–至]/g, "");
+          if (!token) return;
+
+          const rangeMatch = token.match(/(\d+)\s*(?:-|~|～|—|–|至)\s*(\d+)/);
+          if (rangeMatch) {
+            let start = parseInt(rangeMatch[1], 10);
+            let end = parseInt(rangeMatch[2], 10);
+            if (!Number.isFinite(start) || !Number.isFinite(end)) return;
+            if (start > end) [start, end] = [end, start];
+            for (let n = start; n <= end; n += 1) {
+              if (odd && n % 2 === 0) continue;
+              if (even && n % 2 === 1) continue;
+              if (n >= 1 && n <= 60) {
+                numbers.add(n);
+              }
+            }
+            return;
+          }
+
+          const matches = token.match(/\d+/g);
+          if (matches) {
+            matches.forEach((numStr) => {
+              const value = parseInt(numStr, 10);
+              if (!Number.isFinite(value)) return;
+              if (value > 60) return;
+              if (odd && value % 2 === 0) return;
+              if (even && value % 2 === 1) return;
+              numbers.add(value);
+            });
+          }
+        });
+
+        return Array.from(numbers).sort((a, b) => a - b);
+      }
+      function groupConsecutiveSessions(numbers) {
+        const sorted = Array.from(new Set(numbers)).sort((a, b) => a - b);
+        if (!sorted.length) return [];
+        const groups = [];
+        let start = sorted[0];
+        let prev = sorted[0];
+        for (let i = 1; i < sorted.length; i += 1) {
+          const current = sorted[i];
+          if (current === prev + 1) {
+            prev = current;
+            continue;
+          }
+          groups.push({ start, end: prev });
+          start = current;
+          prev = current;
+        }
+        groups.push({ start, end: prev });
+        return groups;
+      }
+
+      function parseDayFromText(text) {
+        if (!text) return null;
+        const str = String(text);
+        if (/周一|星期一|Mon|Monday/i.test(str)) return 1;
+        if (/周二|星期二|Tue|Tuesday/i.test(str)) return 2;
+        if (/周三|星期三|Wed|Wednesday/i.test(str)) return 3;
+        if (/周四|星期四|Thu|Thursday/i.test(str)) return 4;
+        if (/周五|星期五|Fri|Friday/i.test(str)) return 5;
+        if (/周六|星期六|Sat|Saturday/i.test(str)) return 6;
+        if (/周日|星期日|周天|Sun|Sunday/i.test(str)) return 7;
+        return null;
+      }
+
+      function getSessionAndTimeLabels(startSession, endSession) {
+        const sessionLabel =
+          startSession === endSession
+            ? `第${startSession}节`
+            : `第${startSession}-${endSession}节`;
+        const startIndex = sessionRowIndexMap.get(startSession);
+        const endIndex = sessionRowIndexMap.get(endSession);
+        let timeLabel = "";
+        if (startIndex !== undefined && endIndex !== undefined) {
+          const startSlot = TIME_SLOTS[startIndex];
+          const endSlot = TIME_SLOTS[endIndex];
+          if (startSlot && endSlot && startSlot.start && endSlot.end) {
+            timeLabel = `${startSlot.start} - ${endSlot.end}`;
+          }
+        }
+        return { sessionLabel, timeLabel };
+      }
+
+      function getStudentColor(name) {
+        if (!studentColorMap.has(name)) {
+          const index = studentColorMap.size;
+          const hue = Math.round((index * 137.508) % 360);
+          const color = `hsl(${hue}, 70%, 52%)`;
+          studentColorMap.set(name, color);
+        }
+        return studentColorMap.get(name);
+      }
+
+      function getStudentIndex(name) {
+        if (!studentIndexMap.has(name)) {
+          studentIndexMap.set(name, studentIndexMap.size);
+        }
+        return studentIndexMap.get(name);
+      }
+
+      function getReadableTextColor(hslColor) {
+        const match = /hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/i.exec(hslColor);
+        if (!match) return "#ffffff";
+        const lightness = parseFloat(match[3]);
+        return lightness >= 60 ? "#1f2937" : "#ffffff";
+      }
+
+      function adjustHslLightness(hslColor, delta) {
+        const match = /hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/i.exec(hslColor);
+        if (!match) return hslColor;
+        const h = parseFloat(match[1]);
+        const s = parseFloat(match[2]);
+        const l = Math.min(100, Math.max(0, parseFloat(match[3]) + delta));
+        return `hsl(${Math.round(h)}, ${Math.round(s)}%, ${l.toFixed(1)}%)`;
+      }
+
+      function convertHslToHsla(color, alpha = 0.18) {
+        if (typeof color !== "string") {
+          const safeAlpha = Math.min(Math.max(alpha, 0), 1);
+          return `rgba(59, 130, 246, ${safeAlpha})`;
+        }
+        const match = color.match(/hsl\(\s*([\d.]+)\s*,\s*([\d.]+)%\s*,\s*([\d.]+)%\s*\)/i);
+        if (!match) return color;
+        const safeAlpha = Math.min(Math.max(alpha, 0), 1);
+        return `hsla(${parseFloat(match[1])}, ${parseFloat(match[2])}%, ${parseFloat(match[3])}%, ${safeAlpha})`;
+      }
+
+      function startOfWeek(date) {
+        const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const day = result.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        result.setDate(result.getDate() + diff);
+        result.setHours(0, 0, 0, 0);
+        return result;
+      }
+
+      function formatWeekValue(date) {
+        const info = getISOWeekInfo(date);
+        return `${info.year}-W${String(info.week).padStart(2, "0")}`;
+      }
+
+      function parseWeekValue(value) {
+        const match = /^(\d{4})-W(\d{2})$/.exec(value);
+        if (!match) return null;
+        const year = Number(match[1]);
+        const week = Number(match[2]);
+        if (!Number.isFinite(year) || !Number.isFinite(week)) return null;
+        const january4 = new Date(year, 0, 4);
+        const weekOneMonday = startOfWeek(january4);
+        const target = new Date(weekOneMonday);
+        target.setDate(weekOneMonday.getDate() + (week - 1) * 7);
+        return target;
+      }
+
+      function formatFullDate(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+
+      function formatDayDisplay(date) {
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${month}/${day}`;
+      }
+
+      function formatDateInput(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      }
+
+      function getISOWeekInfo(date) {
+        const temp = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        temp.setHours(0, 0, 0, 0);
+        const day = temp.getDay() || 7;
+        temp.setDate(temp.getDate() + 4 - day);
+        const yearStart = new Date(temp.getFullYear(), 0, 1);
+        const week = Math.ceil(((temp - yearStart) / MS_PER_DAY + 1) / 7);
+        return { year: temp.getFullYear(), week };
+      }
+    })();
+  </script>
+</body>
+</html>
